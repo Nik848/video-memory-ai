@@ -106,8 +106,9 @@ def query(user_query: str, top_k: int = None,
             enriched_results = _rerank(reranker, user_query, enriched_results)
 
     # limit results (IMPORTANT)
-    limited_results = enriched_results[:max(TOP_N_RERANKED, page_size)]
     offset = max(0, (max(1, page) - 1) * max(1, page_size))
+    needed = offset + max(1, page_size)
+    limited_results = enriched_results[:max(TOP_N_RERANKED, needed)]
     top_results = limited_results[offset: offset + max(1, page_size)]
 
     # 5. LLM

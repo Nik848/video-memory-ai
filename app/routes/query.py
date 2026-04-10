@@ -4,7 +4,7 @@ Semantic search and LLM-powered question answering.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 import time
 from app.services.query_engine import query
 from app.services.auth import require_api_key, get_user_id
@@ -26,7 +26,7 @@ class QueryFeedbackRequest(BaseModel):
     precision_at_k: Optional[float] = None
     recall_at_k: Optional[float] = None
     answer_relevance: Optional[float] = None
-    feedback: Optional[str] = None
+    feedback: Optional[Literal["positive", "negative", "neutral"]] = None
 
 
 @router.post("/", dependencies=[Depends(require_api_key)])

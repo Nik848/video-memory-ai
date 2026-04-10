@@ -50,6 +50,9 @@ def _ensure_videos_category_column():
 
 def _ensure_schema_compatibility():
     """Add non-breaking columns for legacy databases."""
+    if not _is_sqlite:
+        return
+
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
 

@@ -186,6 +186,7 @@ Then open:
 - Async queue includes retry with exponential backoff and dead-letter behavior after max attempts.
 - Multi-user separation is supported through `X-User-Id` header (defaults to `public`).
 - Optional API key auth is enabled when `API_KEY` env var is set (`X-API-Key` header).
+- You can force duplicate URL reprocessing via `POST /ingest/async` with `{ "force_reingest": true }`.
 - API versioned routes are also available at `/api/v1/*`.
 - Data and generated artifacts are stored locally (`db/`, `faiss_index/`, `frames/`, etc.).
 - CORS is open for development by default.

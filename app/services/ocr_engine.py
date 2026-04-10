@@ -24,7 +24,8 @@ def _get_reader():
         try:
             from paddleocr import PaddleOCR
             logger.info("Loading PaddleOCR backend")
-            _reader = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
+            paddle_lang = (OCR_LANGUAGES[0] if OCR_LANGUAGES else "en")
+            _reader = PaddleOCR(use_angle_cls=True, lang=paddle_lang, show_log=False)
             _ocr_backend = "paddleocr"
         except Exception as paddle_error:
             logger.warning(f"PaddleOCR unavailable, falling back to EasyOCR: {paddle_error}")

@@ -144,5 +144,5 @@ def _quality_metrics(embeddings, labels) -> dict:
         if len(unique) < 2:
             return {"silhouette": None, "reason": "not_enough_clusters"}
         return {"silhouette": float(silhouette_score(embeddings, labels))}
-    except Exception as exc:
-        return {"silhouette": None, "reason": str(exc)}
+    except Exception:
+        return {"silhouette": None, "reason": "metric_unavailable"}

@@ -57,7 +57,7 @@ def aggregate_metrics(user_id: str) -> dict:
             nums = [v for v in values if v is not None]
             return float(sum(nums) / len(nums)) if nums else None
 
-        positive = [r for r in rows if (r.feedback or "").lower() in {"up", "positive", "good"}]
+        positive = [r for r in rows if (r.feedback or "").lower() == "positive"]
         return {
             "total_queries": len(rows),
             "avg_latency_ms": _avg([r.latency_ms for r in rows]),

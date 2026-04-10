@@ -21,6 +21,7 @@ router = APIRouter(prefix="/ingest", tags=["Ingestion"])
 
 class IngestRequest(BaseModel):
     url: str
+    force_reingest: bool = False
 
 
 class IngestResponse(BaseModel):
@@ -56,8 +57,8 @@ def ingest_video(request: IngestRequest, user_id: str = Depends(get_user_id)):
         result = process_video(request.url, user_id=user_id)
         return result
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Ingestion failed")
 
 
 @router.post("/async", dependencies=[Depends(require_api_key)])
@@ -77,7 +78,7 @@ def ingest_video_async(request: IngestRequest, user_id: str = Depends(get_user_i
             Video.source_fingerprint == fingerprint,
             Video.status.in_([VideoStatus.QUEUED, VideoStatus.PROCESSING, VideoStatus.COMPLETED])
         ).order_by(Video.created_at.desc()).first()
-        if existing_video:
+        if existing_video and not request.force_reingest:
             existing_job = db.query(Job).filter(
                 Job.user_id == user_id,
                 Job.video_id == existing_video.id
