@@ -2,6 +2,12 @@
 
 FastAPI app for ingesting videos, indexing content, and querying across it.
 
+## LLM model
+
+- This project uses Ollama with the `mistral` model for:
+  - query answering over ingested video content
+  - automatic short-video category classification during ingestion
+
 ## Quick start
 
 1. Start the API:
