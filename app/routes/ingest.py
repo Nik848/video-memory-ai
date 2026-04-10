@@ -5,7 +5,7 @@ Handles video submission and async processing.
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 from app.services.pipeline import process_video
 from app.models.database import SessionLocal
 from app.models.schemas import Job, Video
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/ingest", tags=["Ingestion"])
 
 
 class IngestRequest(BaseModel):
-    url: HttpUrl
+    url: str
 
 
 class IngestResponse(BaseModel):
@@ -46,8 +46,11 @@ def ingest_video(request: IngestRequest, background_tasks: BackgroundTasks):
     Returns immediately with a job_id to track progress.
     """
     try:
+        if not request.url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="Invalid URL format")
+
         # Run synchronously for now (can switch to background)
-        result = process_video(str(request.url))
+        result = process_video(request.url)
         return result
 
     except Exception as e:
@@ -63,10 +66,13 @@ def ingest_video_async(request: IngestRequest,
     """
     db = SessionLocal()
     try:
+        if not request.url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="Invalid URL format")
+
         video_id = str(uuid.uuid4())
         job_id = str(uuid.uuid4())
 
-        db_video = Video(id=video_id, url=str(request.url), status=VideoStatus.QUEUED)
+        db_video = Video(id=video_id, url=request.url, status=VideoStatus.QUEUED)
         db_job = Job(
             id=job_id,
             video_id=video_id,
@@ -79,7 +85,7 @@ def ingest_video_async(request: IngestRequest,
     finally:
         db.close()
 
-    background_tasks.add_task(_run_pipeline, str(request.url), video_id, job_id)
+    background_tasks.add_task(_run_pipeline, request.url, video_id, job_id)
     return {
         "status": "queued",
         "message": "Video submitted for processing.",

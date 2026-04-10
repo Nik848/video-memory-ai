@@ -11,6 +11,9 @@ from app.services.embedder import generate_embeddings
 
 logger = logging.getLogger(__name__)
 
+KMEANS_RANDOM_STATE = 42
+KMEANS_N_INIT = 10
+
 
 def _cluster_embeddings(embeddings, min_cluster_size: int = 2):
     """Cluster embeddings with HDBSCAN-first strategy."""
@@ -33,7 +36,11 @@ def _cluster_embeddings(embeddings, min_cluster_size: int = 2):
 
         sample_count = len(embeddings)
         n_clusters = max(1, min(sample_count, int(math.sqrt(sample_count))))
-        labels = KMeans(n_clusters=n_clusters, random_state=42, n_init=10).fit_predict(embeddings)
+        labels = KMeans(
+            n_clusters=n_clusters,
+            random_state=KMEANS_RANDOM_STATE,
+            n_init=KMEANS_N_INIT,
+        ).fit_predict(embeddings)
         logger.info("Clustering done with KMeans fallback")
         return labels.tolist()
     except Exception as kmeans_error:

@@ -11,19 +11,32 @@ from app.config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 logger = logging.getLogger(__name__)
 
+TRANSLATION_MIN_PREDICT_TOKENS = 256
+TRANSLATION_MAX_PREDICT_TOKENS = 2048
+TRANSLATION_TOKENS_PER_WORD = 3
+
+try:
+    from langdetect import detect as _detect_langdetect
+    _LANGDETECT_AVAILABLE = True
+except Exception:
+    _detect_langdetect = None
+    _LANGDETECT_AVAILABLE = False
+
 
 def _detect_language(text: str) -> str:
     """Best-effort language detection with safe fallback."""
     if not text or not text.strip():
         return "unknown"
 
-    try:
-        from langdetect import detect  # optional dependency
-        return detect(text)
-    except Exception:
-        ascii_chars = sum(1 for c in text if c.isascii())
-        ratio = ascii_chars / max(len(text), 1)
-        return "en" if ratio > 0.95 else "unknown"
+    if _LANGDETECT_AVAILABLE:
+        try:
+            return _detect_langdetect(text)
+        except Exception:
+            pass
+
+    ascii_chars = sum(1 for c in text if c.isascii())
+    ratio = ascii_chars / max(len(text), 1)
+    return "en" if ratio > 0.95 else "unknown"
 
 
 def _translate_to_english(text: str, source_lang: str) -> str:
@@ -37,7 +50,13 @@ def _translate_to_english(text: str, source_lang: str) -> str:
         f"Source language: {source_lang}\n"
         f"Text: {text}"
     )
-    max_predict = min(2048, max(256, len(text.split()) * 3))
+    max_predict = min(
+        TRANSLATION_MAX_PREDICT_TOKENS,
+        max(
+            TRANSLATION_MIN_PREDICT_TOKENS,
+            len(text.split()) * TRANSLATION_TOKENS_PER_WORD
+        )
+    )
 
     try:
         response = requests.post(
