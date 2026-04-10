@@ -112,6 +112,7 @@ def get_video_chunks(video_id: str):
 
 
 @router.get("/stats")
+@router.get("/stats/")
 def get_stats():
     """Get system statistics."""
     db = SessionLocal()

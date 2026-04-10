@@ -105,7 +105,7 @@ def ui():
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     }
     .card {
-      background: color-mix(in srgb, var(--card) 92%, black);
+      background: #111933;
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 14px;
@@ -290,7 +290,7 @@ def ui():
     }
 
     async function stats() {
-      try { print("videosOut", await api("GET", "/videos/stats")); }
+      try { print("videosOut", await api("GET", "/videos/stats/")); }
       catch (e) { print("videosOut", e.message); }
     }
   </script>
