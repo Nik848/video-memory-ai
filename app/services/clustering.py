@@ -15,7 +15,11 @@ KMEANS_RANDOM_STATE = 42
 KMEANS_N_INIT = 10
 
 
-def _cluster_embeddings(embeddings, min_cluster_size: int = 2):
+def _cluster_embeddings(
+    embeddings,
+    min_cluster_size: int = 2,
+    kmeans_clusters: int = None,
+):
     """Cluster embeddings with HDBSCAN-first strategy."""
     try:
         import hdbscan
@@ -35,9 +39,11 @@ def _cluster_embeddings(embeddings, min_cluster_size: int = 2):
         from sklearn.cluster import KMeans
 
         sample_count = len(embeddings)
-        # Sqrt(N) is a lightweight heuristic for unknown cluster counts; it works
-        # reasonably for mid-sized datasets but may be suboptimal at extremes.
-        n_clusters = max(1, min(sample_count, int(math.sqrt(sample_count))))
+        if kmeans_clusters and kmeans_clusters > 0:
+            n_clusters = min(sample_count, kmeans_clusters)
+        else:
+            # Sqrt(N) is a lightweight heuristic for unknown cluster counts.
+            n_clusters = max(1, min(sample_count, int(math.sqrt(sample_count))))
         labels = KMeans(
             n_clusters=n_clusters,
             random_state=KMEANS_RANDOM_STATE,
@@ -52,7 +58,11 @@ def _cluster_embeddings(embeddings, min_cluster_size: int = 2):
     return [0] * len(embeddings)
 
 
-def assign_clusters(db, min_cluster_size: int = 2) -> dict:
+def assign_clusters(
+    db,
+    min_cluster_size: int = 2,
+    kmeans_clusters: int = None,
+) -> dict:
     """
     Assign cluster IDs to all chunks in the database.
     Returns clustering summary.
@@ -68,7 +78,11 @@ def assign_clusters(db, min_cluster_size: int = 2) -> dict:
 
     texts = [c.text or "" for c in chunks]
     embeddings = generate_embeddings(texts)
-    labels = _cluster_embeddings(embeddings, min_cluster_size=min_cluster_size)
+    labels = _cluster_embeddings(
+        embeddings,
+        min_cluster_size=min_cluster_size,
+        kmeans_clusters=kmeans_clusters,
+    )
 
     for chunk, label in zip(chunks, labels):
         chunk.cluster_id = int(label)

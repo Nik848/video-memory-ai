@@ -134,7 +134,11 @@ def get_stats():
 
 
 @router.get("/clusters")
-def get_clusters(recompute: bool = False, min_cluster_size: int = 2):
+def get_clusters(
+    recompute: bool = False,
+    min_cluster_size: int = 2,
+    kmeans_clusters: int = 0,
+):
     """Explore chunk clusters with optional recomputation."""
     db = SessionLocal()
     try:
@@ -142,7 +146,8 @@ def get_clusters(recompute: bool = False, min_cluster_size: int = 2):
         if recompute:
             clustering_summary = assign_clusters(
                 db,
-                min_cluster_size=min_cluster_size
+                min_cluster_size=min_cluster_size,
+                kmeans_clusters=kmeans_clusters or None,
             )
 
         chunks = db.query(Chunk).filter(Chunk.cluster_id.isnot(None)).all()

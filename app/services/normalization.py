@@ -15,12 +15,10 @@ TRANSLATION_MIN_PREDICT_TOKENS = 256
 TRANSLATION_MAX_PREDICT_TOKENS = 2048
 TRANSLATION_TOKENS_PER_WORD = 3
 TRANSLATION_REQUEST_TIMEOUT_SECONDS = 20
-ASCII_RATIO_THRESHOLD = 0.95
-
 try:
     from langdetect import detect as _detect_langdetect
     _LANGDETECT_AVAILABLE = True
-except Exception:
+except ImportError:
     _detect_langdetect = None
     _LANGDETECT_AVAILABLE = False
 
@@ -36,9 +34,7 @@ def _detect_language(text: str) -> str:
         except Exception:
             pass
 
-    ascii_chars = sum(1 for c in text if c.isascii())
-    ratio = ascii_chars / max(len(text), 1)
-    return "en" if ratio > ASCII_RATIO_THRESHOLD else "unknown"
+    return "unknown"
 
 
 def _translate_to_english(text: str, source_lang: str) -> str:

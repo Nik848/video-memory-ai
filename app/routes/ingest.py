@@ -32,11 +32,8 @@ _task_results = {}
 
 def _is_valid_url(url: str) -> bool:
     """Basic URL validation with scheme + netloc checks."""
-    try:
-        parsed = urlparse(url)
-        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
-    except Exception:
-        return False
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 def _run_pipeline(url: str, video_id: str = None, job_id: str = None):
