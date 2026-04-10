@@ -38,4 +38,6 @@ def _ensure_videos_category_column():
         return
 
     with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE videos ADD COLUMN category VARCHAR"))
+        connection.execute(
+            text("ALTER TABLE videos ADD COLUMN category VARCHAR(255)")
+        )
