@@ -67,11 +67,13 @@ def assign_clusters(db, min_cluster_size: int = 2) -> dict:
     db.commit()
 
     distribution = Counter(labels)
-    cluster_ids = [cluster_id for cluster_id in distribution.keys() if cluster_id >= 0]
+    valid_cluster_ids = [
+        cluster_id for cluster_id in distribution.keys() if cluster_id >= 0
+    ]
 
     return {
         "total_chunks": len(chunks),
-        "total_clusters": len(cluster_ids),
+        "total_clusters": len(valid_cluster_ids),
         "noise_chunks": distribution.get(-1, 0),
         "distribution": {str(k): v for k, v in distribution.items()},
     }

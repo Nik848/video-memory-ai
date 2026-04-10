@@ -37,6 +37,7 @@ def _translate_to_english(text: str, source_lang: str) -> str:
         f"Source language: {source_lang}\n"
         f"Text: {text}"
     )
+    max_predict = min(2048, max(256, len(text.split()) * 3))
 
     try:
         response = requests.post(
@@ -45,7 +46,7 @@ def _translate_to_english(text: str, source_lang: str) -> str:
                 "model": OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False,
-                "options": {"temperature": 0.0, "num_predict": 256}
+                "options": {"temperature": 0.0, "num_predict": max_predict}
             },
             timeout=20
         )
