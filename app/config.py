@@ -1,0 +1,51 @@
+"""
+Centralized configuration for the Video Memory AI system.
+All paths, model names, and service settings in one place.
+"""
+import os
+
+# ── Base Directories ──────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
+AUDIO_DIR = os.path.join(BASE_DIR, "audio")
+TRANSCRIPT_DIR = os.path.join(BASE_DIR, "transcripts")
+CHUNK_DIR = os.path.join(BASE_DIR, "chunks")
+EMBEDDING_DIR = os.path.join(BASE_DIR, "embeddings")
+FAISS_DIR = os.path.join(BASE_DIR, "faiss_index")
+FRAMES_DIR = os.path.join(BASE_DIR, "frames")
+DB_DIR = os.path.join(BASE_DIR, "db")
+
+# Create all directories
+for d in [DOWNLOAD_DIR, AUDIO_DIR, TRANSCRIPT_DIR, CHUNK_DIR,
+          EMBEDDING_DIR, FAISS_DIR, FRAMES_DIR, DB_DIR]:
+    os.makedirs(d, exist_ok=True)
+
+# ── Database ──────────────────────────────────────────────────────
+DATABASE_URL = f"sqlite:///{os.path.join(DB_DIR, 'reely.db')}"
+
+# ── Models ────────────────────────────────────────────────────────
+WHISPER_MODEL = "base"
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_DIM = 384
+RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+# ── LLM (Ollama) ─────────────────────────────────────────────────
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "mistral"
+
+# ── Processing Settings ──────────────────────────────────────────
+AUDIO_SAMPLE_RATE = 16000
+AUDIO_CHANNELS = 1  # mono
+MAX_CHUNK_WORDS = 120
+
+# ── OCR Settings ──────────────────────────────────────────────────
+OCR_FRAME_INTERVAL = 2  # extract frame every N seconds
+OCR_LANGUAGES = ["en"]
+
+# ── Search Settings ───────────────────────────────────────────────
+TOP_K_RESULTS = 10
+TOP_N_RERANKED = 5
+
+# ── Cookies (for yt-dlp) ─────────────────────────────────────────
+COOKIES_PATH = os.path.join(BASE_DIR, "app", "services", "cookies.txt")
