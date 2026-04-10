@@ -10,6 +10,8 @@ from app.services.embedder import embed_query
 from app.services.vector_store import search as faiss_search
 from app.models.database import SessionLocal
 from app.models.schemas import Chunk, Video
+from app.services.normalization import normalize_text_to_english
+from app.services.query_classifier import classify_query
 from app.config import (
     TOP_K_RESULTS, TOP_N_RERANKED,
     OLLAMA_BASE_URL, OLLAMA_MODEL
@@ -36,13 +38,19 @@ def _get_reranker():
 
 def query(user_query: str, top_k: int = None,
           use_reranker: bool = True,
-          use_llm: bool = True) -> dict:
+          use_llm: bool = True,
+          user_id: str = "public",
+          page: int = 1,
+          page_size: int = 5) -> dict:
 
     if top_k is None:
         top_k = TOP_K_RESULTS
 
+    query_meta = classify_query(user_query)
+    normalized_query = normalize_text_to_english(user_query)
+
     # 1. Embed
-    query_embedding = embed_query(user_query)
+    query_embedding = embed_query(normalized_query)
 
     # 2. Search
     faiss_results = faiss_search(query_embedding, top_k=top_k)
@@ -65,20 +73,22 @@ def query(user_query: str, top_k: int = None,
 
             if chunk:
                 video = db.query(Video).filter(
-                    Video.id == chunk.video_id
+                    Video.id == chunk.video_id,
+                    Video.user_id == user_id
                 ).first()
 
-                enriched_results.append({
-                    "chunk_id": chunk.id,
-                    "text": chunk.text,
-                    "start": chunk.start_time,
-                    "end": chunk.end_time,
-                    "video_id": chunk.video_id,
-                    "video_title": video.title if video else "Unknown",
-                    "video_url": video.url if video else "",
-                    "chunk_type": chunk.chunk_type,
-                    "score": result["score"]
-                })
+                if video:
+                    enriched_results.append({
+                        "chunk_id": chunk.id,
+                        "text": chunk.text,
+                        "start": chunk.start_time,
+                        "end": chunk.end_time,
+                        "video_id": chunk.video_id,
+                        "video_title": video.title if video else "Unknown",
+                        "video_url": video.url if video else "",
+                        "chunk_type": chunk.chunk_type,
+                        "score": result["score"]
+                    })
     finally:
         db.close()
 
@@ -96,12 +106,15 @@ def query(user_query: str, top_k: int = None,
             enriched_results = _rerank(reranker, user_query, enriched_results)
 
     # limit results (IMPORTANT)
-    top_results = enriched_results[:TOP_N_RERANKED]
+    offset = max(0, (max(1, page) - 1) * max(1, page_size))
+    needed = offset + max(1, page_size)
+    limited_results = enriched_results[:max(TOP_N_RERANKED, needed)]
+    top_results = limited_results[offset: offset + max(1, page_size)]
 
     # 5. LLM
     answer = None
     if use_llm:
-        answer = _generate_answer(user_query, top_results)
+        answer = _generate_answer(normalized_query, top_results)
 
     # 6. Sources
     sources = [{
@@ -119,7 +132,11 @@ def query(user_query: str, top_k: int = None,
         "answer": answer if answer else "LLM failed (check logs).",
         "sources": sources,
         "query": user_query,
-        "total_results": len(faiss_results)
+        "normalized_query": normalized_query,
+        "query_intent": query_meta["intent"],
+        "total_results": len(faiss_results),
+        "page": max(1, page),
+        "page_size": max(1, page_size)
     }
 
 

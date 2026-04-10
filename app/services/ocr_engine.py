@@ -4,7 +4,6 @@ Extracts on-screen text from video frames.
 Pipeline: Video → Frame Sampling → OCR → Text Aggregation
 """
 import cv2
-import easyocr
 import os
 import logging
 from typing import List, Dict
@@ -15,15 +14,26 @@ logger = logging.getLogger(__name__)
 
 # Lazy-loaded OCR reader
 _reader = None
+_ocr_backend = None
 
 
 def _get_reader():
-    """Lazy-load EasyOCR reader."""
-    global _reader
+    """Lazy-load OCR reader with PaddleOCR preferred, EasyOCR fallback."""
+    global _reader, _ocr_backend
     if _reader is None:
-        logger.info(f"Loading EasyOCR with languages: {OCR_LANGUAGES}")
-        _reader = easyocr.Reader(OCR_LANGUAGES, gpu=False)
-    return _reader
+        try:
+            from paddleocr import PaddleOCR
+            logger.info("Loading PaddleOCR backend")
+            paddle_lang = (OCR_LANGUAGES[0] if OCR_LANGUAGES else "en")
+            _reader = PaddleOCR(use_angle_cls=True, lang=paddle_lang, show_log=False)
+            _ocr_backend = "paddleocr"
+        except Exception as paddle_error:
+            logger.warning(f"PaddleOCR unavailable, falling back to EasyOCR: {paddle_error}")
+            import easyocr
+            logger.info(f"Loading EasyOCR with languages: {OCR_LANGUAGES}")
+            _reader = easyocr.Reader(OCR_LANGUAGES, gpu=False)
+            _ocr_backend = "easyocr"
+    return _reader, _ocr_backend
 
 
 def extract_frames(video_path: str, video_id: str,
@@ -91,12 +101,17 @@ def ocr_frame(frame_path: str) -> str:
     Returns:
         Extracted text string
     """
-    reader = _get_reader()
+    reader, backend = _get_reader()
 
     try:
-        results = reader.readtext(frame_path)
-        # results is list of (bbox, text, confidence)
-        texts = [text for _, text, conf in results if conf > 0.3]
+        if backend == "paddleocr":
+            results = reader.ocr(frame_path, cls=True) or []
+            lines = results[0] if results else []
+            texts = [line[1][0] for line in lines if line[1][1] > 0.3]
+        else:
+            results = reader.readtext(frame_path)
+            # results is list of (bbox, text, confidence)
+            texts = [text for _, text, conf in results if conf > 0.3]
         return " ".join(texts).strip()
     except Exception as e:
         logger.warning(f"OCR failed on {frame_path}: {e}")

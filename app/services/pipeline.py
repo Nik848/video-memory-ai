@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 def process_video(
     url: str,
     video_id: Optional[str] = None,
-    job_id: Optional[str] = None
+    job_id: Optional[str] = None,
+    user_id: str = "public",
 ) -> dict:
     """
     Full synchronous pipeline for a single video.
@@ -50,9 +51,15 @@ def process_video(
         # ── Create DB records ──────────────────────────────
         video = db.query(Video).filter(Video.id == video_id).first()
         if not video:
-            video = Video(id=video_id, url=url, status=VideoStatus.PROCESSING)
+            video = Video(
+                id=video_id,
+                user_id=user_id,
+                url=url,
+                status=VideoStatus.PROCESSING,
+            )
             db.add(video)
         else:
+            video.user_id = user_id or video.user_id
             video.url = url
             video.status = VideoStatus.PROCESSING
             video.error_message = None
@@ -61,6 +68,7 @@ def process_video(
         if not job:
             job = Job(
                 id=job_id,
+                user_id=user_id,
                 video_id=video_id,
                 status=VideoStatus.PROCESSING,
                 current_step="download"
@@ -159,6 +167,7 @@ def process_video(
         for i, chunk_data in enumerate(all_chunks):
             db_chunk = Chunk(
                 id=chunk_data["id"],
+                user_id=user_id,
                 video_id=video_id,
                 text=chunk_data["text"],
                 start_time=chunk_data["start"],

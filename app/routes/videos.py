@@ -4,23 +4,29 @@ List videos, get status, view chunks, explore clusters.
 """
 from collections import defaultdict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from app.models.database import SessionLocal
 from app.models.schemas import Video, Chunk, Job
 from app.services.vector_store import get_total_vectors
 from app.services.clustering import assign_clusters
+from app.services.auth import require_api_key, get_user_id
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 
 
-@router.get("/")
-def list_videos():
+@router.get("/", dependencies=[Depends(require_api_key)])
+def list_videos(page: int = 1, page_size: int = 20, user_id: str = Depends(get_user_id)):
     """List all ingested videos with their status."""
     db = SessionLocal()
     try:
-        videos = db.query(Video).order_by(Video.created_at.desc()).all()
+        offset = max(0, (max(1, page) - 1) * max(1, page_size))
+        videos_q = db.query(Video).filter(Video.user_id == user_id).order_by(Video.created_at.desc())
+        videos = videos_q.offset(offset).limit(max(1, page_size)).all()
+        total = videos_q.count()
         return {
-            "total": len(videos),
+            "total": total,
+            "page": max(1, page),
+            "page_size": max(1, page_size),
             "videos": [
                 {
                     "id": v.id,
@@ -31,7 +37,8 @@ def list_videos():
                     "status": v.status,
                     "created_at": str(v.created_at),
                     "chunk_count": db.query(Chunk).filter(
-                        Chunk.video_id == v.id
+                        Chunk.video_id == v.id,
+                        Chunk.user_id == user_id,
                     ).count()
                 }
                 for v in videos
@@ -41,17 +48,18 @@ def list_videos():
         db.close()
 
 
-@router.get("/{video_id}")
-def get_video(video_id: str):
+@router.get("/{video_id}", dependencies=[Depends(require_api_key)])
+def get_video(video_id: str, user_id: str = Depends(get_user_id)):
     """Get details of a specific video including its chunks."""
     db = SessionLocal()
     try:
-        video = db.query(Video).filter(Video.id == video_id).first()
+        video = db.query(Video).filter(Video.id == video_id, Video.user_id == user_id).first()
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
 
         chunks = db.query(Chunk).filter(
-            Chunk.video_id == video_id
+            Chunk.video_id == video_id,
+            Chunk.user_id == user_id,
         ).order_by(Chunk.start_time).all()
 
         return {
@@ -70,7 +78,8 @@ def get_video(video_id: str):
                     "start": c.start_time,
                     "end": c.end_time,
                     "type": c.chunk_type,
-                    "cluster_id": c.cluster_id
+                    "cluster_id": c.cluster_id,
+                    "cluster_label": c.cluster_label,
                 }
                 for c in chunks
             ]
@@ -79,13 +88,14 @@ def get_video(video_id: str):
         db.close()
 
 
-@router.get("/{video_id}/chunks")
-def get_video_chunks(video_id: str):
+@router.get("/{video_id}/chunks", dependencies=[Depends(require_api_key)])
+def get_video_chunks(video_id: str, user_id: str = Depends(get_user_id)):
     """Get all chunks for a specific video."""
     db = SessionLocal()
     try:
         chunks = db.query(Chunk).filter(
-            Chunk.video_id == video_id
+            Chunk.video_id == video_id,
+            Chunk.user_id == user_id,
         ).order_by(Chunk.start_time).all()
 
         if not chunks:
@@ -104,7 +114,8 @@ def get_video_chunks(video_id: str):
                     "start": c.start_time,
                     "end": c.end_time,
                     "type": c.chunk_type,
-                    "cluster_id": c.cluster_id
+                    "cluster_id": c.cluster_id,
+                    "cluster_label": c.cluster_label,
                 }
                 for c in chunks
             ]
@@ -115,15 +126,16 @@ def get_video_chunks(video_id: str):
 
 @router.get("/stats")
 @router.get("/stats/")
-def get_stats():
+def get_stats(user_id: str = Depends(get_user_id), _: None = Depends(require_api_key)):
     """Get system statistics."""
     db = SessionLocal()
     try:
-        total_videos = db.query(Video).count()
+        total_videos = db.query(Video).filter(Video.user_id == user_id).count()
         completed_videos = db.query(Video).filter(
-            Video.status == "completed"
+            Video.status == "completed",
+            Video.user_id == user_id,
         ).count()
-        total_chunks = db.query(Chunk).count()
+        total_chunks = db.query(Chunk).filter(Chunk.user_id == user_id).count()
         total_vectors = get_total_vectors()
 
         return {
@@ -141,6 +153,8 @@ def get_clusters(
     recompute: bool = False,
     min_cluster_size: int = 2,
     kmeans_clusters: int = 0,
+    user_id: str = Depends(get_user_id),
+    _: None = Depends(require_api_key),
 ):
     """Explore chunk clusters with optional recomputation."""
     db = SessionLocal()
@@ -151,9 +165,13 @@ def get_clusters(
                 db,
                 min_cluster_size=min_cluster_size,
                 kmeans_clusters=kmeans_clusters or None,
+                user_id=user_id,
             )
 
-        chunks = db.query(Chunk).filter(Chunk.cluster_id.isnot(None)).all()
+        chunks = db.query(Chunk).filter(
+            Chunk.user_id == user_id,
+            Chunk.cluster_id.isnot(None)
+        ).all()
         if not chunks:
             return {
                 "total_clusters": 0,
@@ -180,7 +198,8 @@ def get_clusters(
                         "start": c.start_time,
                         "end": c.end_time,
                         "text": c.text,
-                        "type": c.chunk_type
+                        "type": c.chunk_type,
+                        "cluster_label": c.cluster_label,
                     }
                     for c in cluster_chunks[:3]
                 ]

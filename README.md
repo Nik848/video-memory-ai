@@ -10,7 +10,7 @@ Reely ingests videos from URLs, extracts speech + on-screen text, converts conte
 
 This is a FastAPI-based backend (with a built-in lightweight UI) for:
 
-- ingesting videos (sync or async)
+- ingesting videos (sync or async with DB-backed worker queue)
 - extracting knowledge from audio + OCR
 - semantically indexing chunks
 - querying with retrieval + optional reranking + LLM answer generation
@@ -38,7 +38,7 @@ For each video URL, the ingestion pipeline performs:
 1. **Download** video (`yt-dlp`)
 2. **Extract audio** (`pydub` / ffmpeg)
 3. **Transcribe speech** (Whisper)
-4. **Extract on-screen text** via OCR (EasyOCR + OpenCV, non-fatal if it fails)
+4. **Extract on-screen text** via OCR (PaddleOCR preferred, EasyOCR fallback, non-fatal if it fails)
 5. **Chunk content** into searchable units
 6. **Normalize to English** (best-effort)
 7. **Categorize video** using Ollama (`mistral`)
@@ -59,11 +59,11 @@ Query flow:
 ## Tech Stack
 
 - **Backend/API:** FastAPI, Pydantic
-- **Database:** SQLite + SQLAlchemy
+- **Database:** SQLAlchemy with SQLite (default) or Postgres via `DATABASE_URL`
 - **Vector Search:** FAISS
 - **Embeddings / Reranking:** sentence-transformers
 - **ASR:** OpenAI Whisper
-- **OCR:** EasyOCR + OpenCV
+- **OCR:** PaddleOCR (preferred) + EasyOCR fallback + OpenCV
 - **Video Download:** yt-dlp
 - **Audio Processing:** pydub (+ ffmpeg)
 - **LLM:** Ollama (`mistral:latest`)
@@ -153,13 +153,13 @@ Then open:
 ### Ingestion
 
 - `POST /ingest/` — ingest video synchronously
-- `POST /ingest/async` — enqueue async ingestion
+- `POST /ingest/async` — enqueue async ingestion in DB-backed queue worker
 - `GET /ingest/status/{job_id}` — check ingestion progress
 - `POST /ingest/retry/{job_id}` — retry failed job
 
 ### Query
 
-- `POST /query/` — semantic query + optional LLM answer
+- `POST /query/` — semantic query + query classification + optional LLM answer
 - `GET /query/search?q=...&top_k=10` — raw semantic retrieval (no LLM)
 
 ### Video Management
@@ -183,5 +183,10 @@ Then open:
 ## Notes
 
 - OCR, categorization, and clustering are best-effort stages; failures there do not necessarily fail full ingestion.
+- Async queue includes retry with exponential backoff and dead-letter behavior after max attempts.
+- Multi-user separation is supported through `X-User-Id` header (defaults to `public`).
+- Optional API key auth is enabled when `API_KEY` env var is set (`X-API-Key` header).
+- You can force duplicate URL reprocessing via `POST /ingest/async` with `{ "force_reingest": true }`.
+- API versioned routes are also available at `/api/v1/*`.
 - Data and generated artifacts are stored locally (`db/`, `faiss_index/`, `frames/`, etc.).
 - CORS is open for development by default.
