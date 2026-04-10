@@ -102,3 +102,13 @@ def normalize_chunks_to_english(chunks: List[Dict]) -> List[Dict]:
         translated_count,
     )
     return normalized
+
+
+def normalize_text_to_english(text: str) -> str:
+    """Normalize one text string to English for query-time retrieval."""
+    source_text = (text or "").strip()
+    if not source_text:
+        return source_text
+    language = _detect_language(source_text)
+    normalized = _translate_to_english(source_text, language).strip()
+    return normalized or source_text

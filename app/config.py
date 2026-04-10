@@ -22,7 +22,10 @@ for d in [DOWNLOAD_DIR, AUDIO_DIR, TRANSCRIPT_DIR, CHUNK_DIR,
     os.makedirs(d, exist_ok=True)
 
 # ── Database ──────────────────────────────────────────────────────
-DATABASE_URL = f"sqlite:///{os.path.join(DB_DIR, 'reely.db')}"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    f"sqlite:///{os.path.join(DB_DIR, 'reely.db')}"
+)
 
 # ── Models ────────────────────────────────────────────────────────
 WHISPER_MODEL = "base"
@@ -63,6 +66,17 @@ OCR_LANGUAGES = ["en"]
 # ── Search Settings ───────────────────────────────────────────────
 TOP_K_RESULTS = 10
 TOP_N_RERANKED = 5
+
+# ── Ingestion Queue / Retry Settings ──────────────────────────────
+QUEUE_WORKER_POLL_SECONDS = float(os.getenv("QUEUE_WORKER_POLL_SECONDS", "1.0"))
+JOB_MAX_ATTEMPTS = int(os.getenv("JOB_MAX_ATTEMPTS", "3"))
+JOB_BASE_BACKOFF_SECONDS = int(os.getenv("JOB_BASE_BACKOFF_SECONDS", "10"))
+JOB_MAX_BACKOFF_SECONDS = int(os.getenv("JOB_MAX_BACKOFF_SECONDS", "300"))
+
+# ── API Hardening ──────────────────────────────────────────────────
+API_KEY = os.getenv("API_KEY", "")
+DEFAULT_USER_ID = "public"
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 
 # ── Cookies (for yt-dlp) ─────────────────────────────────────────
 COOKIES_PATH = os.path.join(BASE_DIR, "app", "services", "cookies.txt")

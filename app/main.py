@@ -2,13 +2,19 @@
 Reely — AI Video Memory System
 FastAPI application entry point.
 """
-from fastapi import FastAPI
+import time
+from collections import defaultdict, deque
+from fastapi import FastAPI, Request
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 import logging
 
 from app.models.database import init_db
 from app.routes import ingest, query, videos
+from app.config import RATE_LIMIT_PER_MINUTE
+from app.services.job_queue import start_worker, stop_worker
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +43,11 @@ app.add_middleware(
 app.include_router(ingest.router)
 app.include_router(query.router)
 app.include_router(videos.router)
+app.include_router(ingest.router, prefix="/api/v1")
+app.include_router(query.router, prefix="/api/v1")
+app.include_router(videos.router, prefix="/api/v1")
+
+_rate_window = defaultdict(deque)
 
 
 @app.on_event("startup")
@@ -44,7 +55,66 @@ def startup():
     """Initialize database tables on startup."""
     logger.info("Initializing database...")
     init_db()
+    start_worker()
     logger.info("Reely API is ready!")
+
+
+@app.on_event("shutdown")
+def shutdown():
+    stop_worker()
+
+
+@app.middleware("http")
+async def simple_rate_limiter(request: Request, call_next):
+    if request.url.path in {"/health", "/llm-health", "/"}:
+        return await call_next(request)
+
+    identity = request.headers.get("x-user-id") or request.client.host or "anonymous"
+    now = time.time()
+    bucket = _rate_window[identity]
+    while bucket and (now - bucket[0]) > 60:
+        bucket.popleft()
+    if len(bucket) >= RATE_LIMIT_PER_MINUTE:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": {
+                    "code": "rate_limit_exceeded",
+                    "message": "Too many requests. Please retry later.",
+                    "status_code": 429,
+                }
+            },
+        )
+    bucket.append(now)
+    return await call_next(request)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "internal_server_error",
+                "message": str(exc),
+                "status_code": 500,
+            }
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": "http_error",
+                "message": exc.detail,
+                "status_code": exc.status_code,
+            }
+        },
+    )
 
 
 @app.get("/")
@@ -55,10 +125,13 @@ def root():
         "endpoints": {
             "ui": "/ui",
             "ingest": "/ingest/ (POST)",
+            "v1_ingest": "/api/v1/ingest/ (POST)",
             "ingest_async": "/ingest/async (POST)",
+            "v1_ingest_async": "/api/v1/ingest/async (POST)",
             "ingest_status": "/ingest/status/{job_id} (GET)",
             "ingest_retry": "/ingest/retry/{job_id} (POST)",
             "query": "/query/ (POST)",
+            "v1_query": "/api/v1/query/ (POST)",
             "search": "/query/search?q=... (GET)",
             "videos": "/videos/ (GET)",
             "video_detail": "/videos/{id} (GET)",
@@ -261,12 +334,19 @@ def ui():
       const topK = parseInt(document.getElementById("topK").value || "10", 10);
       if (!question) return print("queryOut", "Enter a question.");
       try {
-        print("queryOut", await api("POST", "/query/", {
+        const data = await api("POST", "/query/", {
           question,
           top_k: Number.isFinite(topK) ? topK : 10,
           use_reranker: true,
           use_llm: true
-        }));
+        });
+        const links = (data.sources || []).map((s, i) => {
+          const t = Math.max(0, Math.floor(s.start || 0));
+          const sep = (s.video_url || "").includes("?") ? "&" : "?";
+          const watch = `${s.video_url || ""}${sep}t=${t}s`;
+          return `${i + 1}. ${s.video_title || "source"} @ ${t}s\\n${watch}`;
+        }).join("\\n\\n");
+        print("queryOut", { ...data, playback_links: links ? links.split("\\n\\n") : [] });
       } catch (e) { print("queryOut", e.message); }
     }
 
