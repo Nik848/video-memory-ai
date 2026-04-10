@@ -20,6 +20,7 @@ from app.services.normalization import normalize_chunks_to_english
 from app.services.embedder import generate_embeddings
 from app.services.vector_store import add_embeddings
 from app.services.clustering import assign_clusters
+from app.services.categorizer import categorize_video
 
 logger = logging.getLogger(__name__)
 
@@ -132,17 +133,28 @@ def process_video(
         _update_job(db, job, "normalization")
         all_chunks = normalize_chunks_to_english(all_chunks)
 
-        # ── Step 7: Generate Embeddings ───────────────────
+        # ── Step 7: Categorize video (non-fatal) ──────────
+        try:
+            _update_job(db, job, "categorization")
+            video.category = categorize_video(
+                title=video.title,
+                chunk_texts=[c["text"] for c in all_chunks]
+            )
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Categorization step failed (non-fatal): {e}")
+
+        # ── Step 8: Generate Embeddings ───────────────────
         _update_job(db, job, "embedding")
         texts = [c["text"] for c in all_chunks]
         embeddings = generate_embeddings(texts)
 
-        # ── Step 8: Store in FAISS ────────────────────────
+        # ── Step 9: Store in FAISS ────────────────────────
         _update_job(db, job, "indexing")
         chunk_ids = [c["id"] for c in all_chunks]
         faiss_positions = add_embeddings(embeddings, chunk_ids)
 
-        # ── Step 9: Save chunks to DB ─────────────────────
+        # ── Step 10: Save chunks to DB ────────────────────
         _update_job(db, job, "saving")
         for i, chunk_data in enumerate(all_chunks):
             db_chunk = Chunk(
@@ -157,7 +169,7 @@ def process_video(
             db.add(db_chunk)
         db.commit()
 
-        # ── Step 10: Clustering (non-fatal) ───────────────
+        # ── Step 11: Clustering (non-fatal) ───────────────
         cluster_summary = None
         try:
             _update_job(db, job, "clustering")

@@ -33,6 +33,7 @@ class Video(Base):
     id = Column(String, primary_key=True)  # UUID
     url = Column(String, nullable=False)
     title = Column(String, nullable=True)
+    category = Column(String, nullable=True)
     duration = Column(Float, nullable=True)
     video_path = Column(String, nullable=True)
     audio_path = Column(String, nullable=True)

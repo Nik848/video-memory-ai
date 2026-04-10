@@ -33,6 +33,23 @@ RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 # ── LLM (Ollama) ─────────────────────────────────────────────────
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_MODEL = "mistral"
+VIDEO_CATEGORIES = [
+    "education",
+    "technology",
+    "business",
+    "finance",
+    "entertainment",
+    "sports",
+    "health",
+    "lifestyle",
+    "travel",
+    "food",
+    "fashion",
+    "news",
+    "gaming",
+    "music",
+    "other",
+]
 
 # ── Processing Settings ──────────────────────────────────────────
 AUDIO_SAMPLE_RATE = 16000
