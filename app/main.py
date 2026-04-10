@@ -54,10 +54,14 @@ def root():
         "endpoints": {
             "ingest": "/ingest/ (POST)",
             "ingest_async": "/ingest/async (POST)",
+            "ingest_status": "/ingest/status/{job_id} (GET)",
+            "ingest_retry": "/ingest/retry/{job_id} (POST)",
             "query": "/query/ (POST)",
             "search": "/query/search?q=... (GET)",
             "videos": "/videos/ (GET)",
             "video_detail": "/videos/{id} (GET)",
+            "video_stats": "/videos/stats (GET)",
+            "clusters": "/videos/clusters?recompute=true (GET)",
             "docs": "/docs"
         }
     }

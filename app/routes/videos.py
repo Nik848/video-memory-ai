@@ -2,10 +2,13 @@
 Video Management Routes
 List videos, get status, view chunks, explore clusters.
 """
+from collections import defaultdict
+
 from fastapi import APIRouter, HTTPException
 from app.models.database import SessionLocal
 from app.models.schemas import Video, Chunk, Job
 from app.services.vector_store import get_total_vectors
+from app.services.clustering import assign_clusters
 
 router = APIRouter(prefix="/videos", tags=["Videos"])
 
@@ -108,7 +111,7 @@ def get_video_chunks(video_id: str):
         db.close()
 
 
-@router.get("/")
+@router.get("/stats")
 def get_stats():
     """Get system statistics."""
     db = SessionLocal()
@@ -125,6 +128,61 @@ def get_stats():
             "completed_videos": completed_videos,
             "total_chunks": total_chunks,
             "total_vectors": total_vectors
+        }
+    finally:
+        db.close()
+
+
+@router.get("/clusters")
+def get_clusters(recompute: bool = False, min_cluster_size: int = 2):
+    """Explore chunk clusters with optional recomputation."""
+    db = SessionLocal()
+    try:
+        clustering_summary = None
+        if recompute:
+            clustering_summary = assign_clusters(
+                db,
+                min_cluster_size=min_cluster_size
+            )
+
+        chunks = db.query(Chunk).filter(Chunk.cluster_id.isnot(None)).all()
+        if not chunks:
+            return {
+                "total_clusters": 0,
+                "clusters": [],
+                "recomputed": recompute,
+                "summary": clustering_summary
+            }
+
+        grouped = defaultdict(list)
+        for chunk in chunks:
+            grouped[chunk.cluster_id].append(chunk)
+
+        clusters = []
+        for cluster_id, cluster_chunks in sorted(grouped.items(), key=lambda x: x[0]):
+            videos = {c.video_id for c in cluster_chunks}
+            clusters.append({
+                "cluster_id": cluster_id,
+                "chunk_count": len(cluster_chunks),
+                "video_count": len(videos),
+                "samples": [
+                    {
+                        "chunk_id": c.id,
+                        "video_id": c.video_id,
+                        "start": c.start_time,
+                        "end": c.end_time,
+                        "text": c.text,
+                        "type": c.chunk_type
+                    }
+                    for c in cluster_chunks[:3]
+                ]
+            })
+
+        return {
+            "total_clusters": len(clusters),
+            "clusters": clusters,
+            "recomputed": recompute,
+            "summary": clustering_summary
         }
     finally:
         db.close()

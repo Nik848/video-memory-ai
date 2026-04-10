@@ -8,6 +8,7 @@ Tracks progress in the database for each step.
 import uuid
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.models.database import SessionLocal
 from app.models.schemas import Video, Chunk, Job, VideoStatus
@@ -15,13 +16,19 @@ from app.services.downloader import download_video
 from app.services.audio_extractor import extract_audio
 from app.services.transcriber import transcribe_audio
 from app.services.chunker import chunk_transcript, chunk_ocr_texts
+from app.services.normalization import normalize_chunks_to_english
 from app.services.embedder import generate_embeddings
 from app.services.vector_store import add_embeddings
+from app.services.clustering import assign_clusters
 
 logger = logging.getLogger(__name__)
 
 
-def process_video(url: str) -> dict:
+def process_video(
+    url: str,
+    video_id: Optional[str] = None,
+    job_id: Optional[str] = None
+) -> dict:
     """
     Full synchronous pipeline for a single video.
 
@@ -31,18 +38,38 @@ def process_video(url: str) -> dict:
     Returns:
         dict with video_id, status, and processing results
     """
-    video_id = str(uuid.uuid4())
-    job_id = str(uuid.uuid4())
+    video_id = video_id or str(uuid.uuid4())
+    job_id = job_id or str(uuid.uuid4())
 
     db = SessionLocal()
+    video = None
+    job = None
 
     try:
         # ── Create DB records ──────────────────────────────
-        video = Video(id=video_id, url=url, status=VideoStatus.PROCESSING)
-        job = Job(id=job_id, video_id=video_id,
-                  status=VideoStatus.PROCESSING, current_step="download")
-        db.add(video)
-        db.add(job)
+        video = db.query(Video).filter(Video.id == video_id).first()
+        if not video:
+            video = Video(id=video_id, url=url, status=VideoStatus.PROCESSING)
+            db.add(video)
+        else:
+            video.url = url
+            video.status = VideoStatus.PROCESSING
+            video.error_message = None
+
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            job = Job(
+                id=job_id,
+                video_id=video_id,
+                status=VideoStatus.PROCESSING,
+                current_step="download"
+            )
+            db.add(job)
+        else:
+            job.status = VideoStatus.PROCESSING
+            job.current_step = "download"
+            job.error_message = None
+
         db.commit()
 
         # ── Step 1: Download ──────────────────────────────
@@ -101,17 +128,21 @@ def process_video(url: str) -> dict:
                 "message": "No text content found in video"
             }
 
-        # ── Step 6: Generate Embeddings ───────────────────
+        # ── Step 6: Normalize multilingual text ───────────
+        _update_job(db, job, "normalization")
+        all_chunks = normalize_chunks_to_english(all_chunks)
+
+        # ── Step 7: Generate Embeddings ───────────────────
         _update_job(db, job, "embedding")
         texts = [c["text"] for c in all_chunks]
         embeddings = generate_embeddings(texts)
 
-        # ── Step 7: Store in FAISS ────────────────────────
+        # ── Step 8: Store in FAISS ────────────────────────
         _update_job(db, job, "indexing")
         chunk_ids = [c["id"] for c in all_chunks]
         faiss_positions = add_embeddings(embeddings, chunk_ids)
 
-        # ── Step 8: Save chunks to DB ─────────────────────
+        # ── Step 9: Save chunks to DB ─────────────────────
         _update_job(db, job, "saving")
         for i, chunk_data in enumerate(all_chunks):
             db_chunk = Chunk(
@@ -124,6 +155,15 @@ def process_video(url: str) -> dict:
                 faiss_index=faiss_positions[i] if i < len(faiss_positions) else None
             )
             db.add(db_chunk)
+        db.commit()
+
+        # ── Step 10: Clustering (non-fatal) ───────────────
+        cluster_summary = None
+        try:
+            _update_job(db, job, "clustering")
+            cluster_summary = assign_clusters(db)
+        except Exception as e:
+            logger.warning(f"Clustering step failed (non-fatal): {e}")
 
         # ── Mark completed ────────────────────────────────
         video.status = VideoStatus.COMPLETED
@@ -143,7 +183,8 @@ def process_video(url: str) -> dict:
             "speech_chunks": len(speech_chunks),
             "ocr_chunks": len(ocr_chunks),
             "total_chunks": len(all_chunks),
-            "language": transcript_result.get("language", "unknown")
+            "language": transcript_result.get("language", "unknown"),
+            "clusters": cluster_summary
         }
 
     except Exception as e:
@@ -151,10 +192,12 @@ def process_video(url: str) -> dict:
 
         # Update DB with failure
         try:
-            video.status = VideoStatus.FAILED
-            video.error_message = str(e)
-            job.status = VideoStatus.FAILED
-            job.error_message = str(e)
+            if video:
+                video.status = VideoStatus.FAILED
+                video.error_message = str(e)
+            if job:
+                job.status = VideoStatus.FAILED
+                job.error_message = str(e)
             db.commit()
         except Exception:
             db.rollback()
