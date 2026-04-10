@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 TRANSLATION_MIN_PREDICT_TOKENS = 256
 TRANSLATION_MAX_PREDICT_TOKENS = 2048
 TRANSLATION_TOKENS_PER_WORD = 3
+TRANSLATION_REQUEST_TIMEOUT_SECONDS = 20
 
 try:
     from langdetect import detect as _detect_langdetect
@@ -67,7 +68,7 @@ def _translate_to_english(text: str, source_lang: str) -> str:
                 "stream": False,
                 "options": {"temperature": 0.0, "num_predict": max_predict}
             },
-            timeout=20
+            timeout=TRANSLATION_REQUEST_TIMEOUT_SECONDS
         )
         if response.status_code == 200:
             translated = response.json().get("response", "").strip()

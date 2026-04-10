@@ -35,6 +35,7 @@ def _cluster_embeddings(embeddings, min_cluster_size: int = 2):
         from sklearn.cluster import KMeans
 
         sample_count = len(embeddings)
+        # Sqrt(N) is a common lightweight heuristic for unknown cluster counts.
         n_clusters = max(1, min(sample_count, int(math.sqrt(sample_count))))
         labels = KMeans(
             n_clusters=n_clusters,

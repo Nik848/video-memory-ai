@@ -3,6 +3,7 @@ Ingestion Routes
 Handles video submission and async processing.
 """
 import uuid
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
@@ -29,6 +30,15 @@ class IngestResponse(BaseModel):
 _task_results = {}
 
 
+def _is_valid_http_url(url: str) -> bool:
+    """Basic URL validation with scheme + netloc checks."""
+    try:
+        parsed = urlparse(url)
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    except Exception:
+        return False
+
+
 def _run_pipeline(url: str, video_id: str = None, job_id: str = None):
     """Background task wrapper for the pipeline."""
     try:
@@ -46,7 +56,7 @@ def ingest_video(request: IngestRequest, background_tasks: BackgroundTasks):
     Returns immediately with a job_id to track progress.
     """
     try:
-        if not request.url.startswith(("http://", "https://")):
+        if not _is_valid_http_url(request.url):
             raise HTTPException(status_code=400, detail="Invalid URL format")
 
         # Run synchronously for now (can switch to background)
@@ -66,7 +76,7 @@ def ingest_video_async(request: IngestRequest,
     """
     db = SessionLocal()
     try:
-        if not request.url.startswith(("http://", "https://")):
+        if not _is_valid_http_url(request.url):
             raise HTTPException(status_code=400, detail="Invalid URL format")
 
         video_id = str(uuid.uuid4())
