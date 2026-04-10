@@ -152,7 +152,7 @@ Then open:
 
 ### Ingestion
 
-- `POST /ingest/` — ingest video (currently synchronous)
+- `POST /ingest/` — ingest video synchronously
 - `POST /ingest/async` — enqueue async ingestion
 - `GET /ingest/status/{job_id}` — check ingestion progress
 - `POST /ingest/retry/{job_id}` — retry failed job
