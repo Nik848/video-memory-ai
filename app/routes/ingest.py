@@ -30,7 +30,7 @@ class IngestResponse(BaseModel):
 _task_results = {}
 
 
-def _is_valid_http_url(url: str) -> bool:
+def _is_valid_url(url: str) -> bool:
     """Basic URL validation with scheme + netloc checks."""
     try:
         parsed = urlparse(url)
@@ -56,7 +56,7 @@ def ingest_video(request: IngestRequest, background_tasks: BackgroundTasks):
     Returns immediately with a job_id to track progress.
     """
     try:
-        if not _is_valid_http_url(request.url):
+        if not _is_valid_url(request.url):
             raise HTTPException(status_code=400, detail="Invalid URL format")
 
         # Run synchronously for now (can switch to background)
@@ -76,7 +76,7 @@ def ingest_video_async(request: IngestRequest,
     """
     db = SessionLocal()
     try:
-        if not _is_valid_http_url(request.url):
+        if not _is_valid_url(request.url):
             raise HTTPException(status_code=400, detail="Invalid URL format")
 
         video_id = str(uuid.uuid4())
