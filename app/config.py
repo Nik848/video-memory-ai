@@ -31,8 +31,8 @@ EMBEDDING_DIM = 384
 RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 # ── LLM (Ollama) ─────────────────────────────────────────────────
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "mistral"
+OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+OLLAMA_MODEL = "mistral:latest"
 VIDEO_CATEGORIES = [
     "education",
     "technology",

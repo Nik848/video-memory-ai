@@ -316,3 +316,18 @@ def health():
         }
     finally:
         db.close()
+
+@app.get("/llm-health")
+def llm_health():
+    import requests
+    try:
+        res = requests.get("http://127.0.0.1:11434")
+        return {
+            "status": "ok",
+            "ollama_status_code": res.status_code
+        }
+    except Exception as e:
+        return {
+            "status": "fail",
+            "error": str(e)
+        }
